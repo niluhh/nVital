@@ -72,3 +72,12 @@ xattr -dr com.apple.quarantine /Volumes/USB/nVital.app
 ```
 
 Para distribuirla sin ese paso, fírmala con un certificado Developer ID y notarízala (el *hardened runtime* ya está activado).
+
+### Permisos
+
+- **Cámara, micrófono y Bluetooth**: macOS los pide la primera vez que se ejecuta cada prueba.
+- **Accesibilidad** (opcional): en la prueba de teclado permite bloquear los atajos del sistema (F11 «Mostrar escritorio», ⌘Tab, Spotlight…) para que todas las pulsaciones lleguen a nVital. Sin este permiso, la prueba funciona igual, pero una tecla de función que no se detecte se marca como aviso en vez de como fallo.
+
+Durante la prueba de teclado, la fila superior pasa a enviar F1–F12 (como la opción «Usar F1, F2, etc. como teclas de función estándar»), así que no cambia el brillo ni el volumen ni abre Mission Control. Al terminar se vuelve al modo elegido en Ajustes del Sistema. Si la app se cierra de forma inesperada durante la prueba, se restaura al volver a abrirla o al reiniciar sesión.
+
+Como la app se firma *ad hoc*, cada compilación nueva es otra app para macOS: puede que tengas que volver a conceder los permisos tras recompilar.
