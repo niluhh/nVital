@@ -8,5 +8,9 @@
 	<true/>
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<!-- Ad-hoc signed builds have no Team ID, so library validation would
+	     refuse to load the embedded NVitalCore.framework at launch. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
 </dict>
 </plist>
