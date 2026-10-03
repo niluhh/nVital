@@ -1,0 +1,55 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-package:
+    name: NVitalCore (Swift Package)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  app:
+    name: nVital.app (Xcode, universal)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build and test
+        shell: bash {0}
+        run: |
+          xcodebuild test \
+            -project nVital.xcodeproj \
+            -scheme nVital \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY=- \
+            > xcodebuild.log 2>&1
+          status=$?
+          tail -n 30 xcodebuild.log
+          echo "::group::Compiler diagnostics"
+          grep -E "(error|warning): " xcodebuild.log | sort -u || true
+          echo "::endgroup::"
+          exit $status
+      - name: Build universal Release
+        run: |
+          xcodebuild build \
+            -project nVital.xcodeproj \
+            -scheme nVital \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            ONLY_ACTIVE_ARCH=NO
+          lipo -info build/Build/Products/Release/nVital.app/Contents/MacOS/nVital
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nVital-app
+          path: build/Build/Products/Release/nVital.app
