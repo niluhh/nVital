@@ -49,6 +49,16 @@ jobs:
             -destination 'generic/platform=macOS' \
             ONLY_ACTIVE_ARCH=NO
           lipo -info build/Build/Products/Release/nVital.app/Contents/MacOS/nVital
+      - name: Launch smoke test
+        run: |
+          # Catches launch-time failures such as the framework failing to load.
+          build/Build/Products/Release/nVital.app/Contents/MacOS/nVital &
+          pid=$!
+          sleep 8
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"; echo "nVital exited at launch with status $?"; exit 1
+          fi
+          kill "$pid"
       - uses: actions/upload-artifact@v4
         with:
           name: nVital-app
