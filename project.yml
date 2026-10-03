@@ -1,0 +1,77 @@
+# XcodeGen spec. Generate the Xcode project with:
+#   xcodegen generate
+name: nVital
+
+options:
+  deploymentTarget:
+    macOS: "10.13"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+configFiles:
+  Debug: Configs/Shared.xcconfig
+  Release: Configs/Shared.xcconfig
+
+targets:
+  # Framework with every diagnostic and the report generation.
+  # Must not depend on AppKit so it can be reused by other apps of the suite.
+  NVitalCore:
+    type: framework
+    platform: macOS
+    sources:
+      - path: NVitalCore/Sources
+    settings:
+      base:
+        PRODUCT_NAME: NVitalCore
+        PRODUCT_BUNDLE_IDENTIFIER: $(NVITAL_BUNDLE_ID_PREFIX).nvital.core
+        INFOPLIST_FILE: NVitalCore/Info.plist
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        DYLIB_INSTALL_NAME_BASE: "@rpath"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @loader_path/Frameworks"
+    dependencies:
+      - sdk: IOKit.framework
+      - sdk: CoreWLAN.framework
+      - sdk: IOBluetooth.framework
+      - sdk: AVFoundation.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+    scheme:
+      testTargets:
+        - NVitalCoreTests
+
+  NVitalCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: NVitalCore/Tests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(NVITAL_BUNDLE_ID_PREFIX).nvital.core.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: NVitalCore
+
+  # AppKit user interface only. All diagnostic logic lives in NVitalCore.
+  nVital:
+    type: application
+    platform: macOS
+    sources:
+      - path: nVital/Sources
+      - path: nVital/Resources
+        buildPhase: none
+    settings:
+      base:
+        PRODUCT_NAME: nVital
+        PRODUCT_BUNDLE_IDENTIFIER: $(NVITAL_BUNDLE_ID_PREFIX).nvital
+        INFOPLIST_FILE: nVital/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: nVital/Resources/nVital.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+    dependencies:
+      - target: NVitalCore
+        embed: true
+        codeSign: true
+    scheme:
+      testTargets:
+        - NVitalCoreTests
