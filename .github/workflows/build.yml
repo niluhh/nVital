@@ -25,14 +25,20 @@ jobs:
       - name: Generate project
         run: xcodegen generate
       - name: Build and test
+        shell: bash {0}
         run: |
           xcodebuild test \
             -project nVital.xcodeproj \
             -scheme nVital \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY=- \
-            | tee xcodebuild.log
-          exit ${PIPESTATUS[0]}
+            > xcodebuild.log 2>&1
+          status=$?
+          tail -n 30 xcodebuild.log
+          echo "::group::Compiler diagnostics"
+          grep -E "(error|warning): " xcodebuild.log | sort -u || true
+          echo "::endgroup::"
+          exit $status
       - name: Build universal Release
         run: |
           xcodebuild build \

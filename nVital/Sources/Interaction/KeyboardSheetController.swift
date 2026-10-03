@@ -117,7 +117,7 @@ final class KeyboardView: NSView {
                 fill.setFill()
                 let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5)
                 path.fill()
-                NSColor.separatorColor.setStroke()
+                NSColor.gridColor.setStroke()
                 path.stroke()
 
                 let attributes: [NSAttributedString.Key: Any] = [
