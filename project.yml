@@ -3,6 +3,8 @@
 name: nVital
 
 options:
+  # Keep the project readable by Xcode 15 and later.
+  projectFormat: xcode15_0
   deploymentTarget:
     macOS: "10.13"
   createIntermediateGroups: true
