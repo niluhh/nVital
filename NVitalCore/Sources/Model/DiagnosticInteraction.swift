@@ -103,9 +103,13 @@ public struct KeyboardCaptureRequest {
 
 public struct KeyboardCaptureResult: Equatable {
     public let pressedKeyCodes: Set<UInt16>
+    /// Whether the app kept macOS shortcuts (e.g. F11 Show Desktop, ⌘Tab)
+    /// from swallowing key presses during the capture.
+    public let systemShortcutsBlocked: Bool
 
-    public init(pressedKeyCodes: Set<UInt16>) {
+    public init(pressedKeyCodes: Set<UInt16>, systemShortcutsBlocked: Bool = false) {
         self.pressedKeyCodes = pressedKeyCodes
+        self.systemShortcutsBlocked = systemShortcutsBlocked
     }
 }
 

@@ -1,9 +1,19 @@
 import AppKit
+import ApplicationServices
+import Carbon.HIToolbox
 import NVitalCore
 
 /// Draws the keyboard and lights up each key as it is pressed.
+///
+/// While the sheet is open, macOS shortcuts (F11 Show Desktop, ⌘Tab,
+/// Spotlight…) are disabled so every key press reaches the view. macOS only
+/// lets apps with Accessibility permission do that.
 final class KeyboardSheetController: SheetController {
     private let keyboardView: KeyboardView
+    private let shortcutsLabel: NSTextField
+    private let permissionButton: NSButton
+    private var hotKeyModeToken: UnsafeMutableRawPointer?
+    private var trustTimer: Timer?
 
     init(request: KeyboardCaptureRequest) {
         let keyboardView = KeyboardView(keys: request.keys)
@@ -11,13 +21,33 @@ final class KeyboardSheetController: SheetController {
         keyboardView.heightAnchor.constraint(equalToConstant: 300).isActive = true
         self.keyboardView = keyboardView
 
+        let shortcutsLabel = NSTextField(labelWithString: "")
+        shortcutsLabel.font = NSFont.systemFont(ofSize: 11)
+        shortcutsLabel.lineBreakMode = .byTruncatingTail
+        shortcutsLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let permissionButton = NSButton(title: "Dar permiso…", target: nil, action: nil)
+        permissionButton.controlSize = .small
+        self.shortcutsLabel = shortcutsLabel
+        self.permissionButton = permissionButton
+
+        let shortcutsRow = NSStackView(views: [shortcutsLabel, permissionButton])
+        shortcutsRow.orientation = .horizontal
+        let content = NSStackView(views: [keyboardView, shortcutsRow])
+        content.orientation = .vertical
+        content.alignment = .leading
+        content.spacing = 8
+        keyboardView.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+
         // No key equivalent: Return must reach the keyboard view, not the button.
         let doneButton = NSButton(title: "Terminar", target: nil, action: nil)
         super.init(title: "Prueba de teclado", instructions: request.instructions,
-                   content: keyboardView, size: NSSize(width: 820, height: 460), buttons: [doneButton])
+                   content: content, size: NSSize(width: 820, height: 500), buttons: [doneButton])
         doneButton.target = self
         doneButton.action = #selector(done(_:))
+        permissionButton.target = self
+        permissionButton.action = #selector(requestAccessibility(_:))
         window?.initialFirstResponder = keyboardView
+        updateShortcutBlocking()
     }
 
     @available(*, unavailable)
@@ -25,8 +55,47 @@ final class KeyboardSheetController: SheetController {
         fatalError("init(coder:) is not supported")
     }
 
+    override func tearDown() {
+        trustTimer?.invalidate()
+        trustTimer = nil
+        if let token = hotKeyModeToken {
+            PopSymbolicHotKeyMode(token)
+            hotKeyModeToken = nil
+        }
+    }
+
     @objc private func done(_ sender: Any?) {
-        finish(.keyboard(KeyboardCaptureResult(pressedKeyCodes: keyboardView.pressedKeyCodes)))
+        finish(.keyboard(KeyboardCaptureResult(pressedKeyCodes: keyboardView.pressedKeyCodes,
+                                               systemShortcutsBlocked: hotKeyModeToken != nil)))
+    }
+
+    // MARK: - System shortcuts
+
+    /// Disables system shortcuts while this app is frontmost, once permitted.
+    private func updateShortcutBlocking() {
+        if hotKeyModeToken == nil && AXIsProcessTrusted() {
+            hotKeyModeToken = PushSymbolicHotKeyMode(OptionBits(kHIHotKeyModeAllDisabled))
+        }
+        let blocked = hotKeyModeToken != nil
+        shortcutsLabel.stringValue = blocked
+            ? "Atajos del sistema bloqueados mientras dura la prueba."
+            : "Para bloquear también los atajos del sistema (F11, ⌘Tab, Spotlight…), nVital necesita permiso de Accesibilidad."
+        shortcutsLabel.textColor = blocked ? .systemGreen : .secondaryLabelColor
+        permissionButton.isHidden = blocked
+        if blocked {
+            trustTimer?.invalidate()
+            trustTimer = nil
+        }
+    }
+
+    @objc private func requestAccessibility(_ sender: Any?) {
+        // Shows macOS' own prompt, which leads to Privacy & Security > Accessibility.
+        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        window?.makeFirstResponder(keyboardView)
+        trustTimer?.invalidate()
+        trustTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.updateShortcutBlocking()
+        }
     }
 }
 

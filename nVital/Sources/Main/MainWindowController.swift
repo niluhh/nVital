@@ -148,10 +148,18 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byTruncatingTail
         subtitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let header = NSStackView(views: [title, subtitle])
-        header.orientation = .vertical
-        header.alignment = .leading
-        header.spacing = 2
+        let titles = NSStackView(views: [title, subtitle])
+        titles.orientation = .vertical
+        titles.alignment = .leading
+        titles.spacing = 2
+        let logo = NSImageView(image: NSApp.applicationIconImage)
+        logo.imageScaling = .scaleProportionallyUpOrDown
+        logo.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        logo.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        let header = NSStackView(views: [logo, titles])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 10
 
         let tableScroll = makeTable()
         let detailScroll = makeDetailView()
