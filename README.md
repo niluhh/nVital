@@ -10,6 +10,7 @@ nVital/
 ├── project.yml                 # Especificación XcodeGen (genera nVital.xcodeproj)
 ├── Package.swift               # NVitalCore como Swift Package, para otras apps de la suite
 ├── Configs/Shared.xcconfig     # Prefijo de bundle ID, versión, despliegue 10.13, arquitecturas
+├── Scripts/make_app_icon.py    # Dibuja el icono (requiere Pillow: pip install pillow)
 ├── NVitalCore/                 # Framework: lógica de diagnóstico, sin AppKit
 │   ├── Sources/
 │   │   ├── Model/              # Protocolo DiagnosticTest, resultados, contexto, interacción
@@ -24,6 +25,7 @@ nVital/
     │   ├── App/                # main.swift, AppDelegate, menú
     │   ├── Main/               # Ventana principal y exportación del informe
     │   └── Interaction/        # Hojas de las pruebas interactivas
+    ├── Assets.xcassets/        # Icono de la app
     └── Resources/              # Info.plist y entitlements
 ```
 
