@@ -40,7 +40,7 @@ final class BatteryEvaluationTests: XCTestCase {
 }
 
 final class KeyboardEvaluationTests: XCTestCase {
-    private let keys = KeyboardTest.keys(hasTouchBar: false)
+    private let keys = KeyboardTest.keys(shape: .ansi, hasTouchBar: false)
 
     private func requiredCodes(_ keys: [KeyDescriptor]) -> Set<UInt16> {
         return Set(keys.filter { $0.isRequired }.map { $0.keyCode })
@@ -58,16 +58,61 @@ final class KeyboardEvaluationTests: XCTestCase {
         XCTAssertTrue(outcome.measurements.contains { $0.value.contains("A") })
     }
 
-    func testKeyCodesAreUnique() {
-        let codes = keys.map { $0.keyCode }
-        XCTAssertEqual(codes.count, Set(codes).count)
+    func testKeyCodesAreUniqueInEveryShape() {
+        for shape in [KeyboardLayout.Shape.ansi, .iso, .jis] {
+            let codes = KeyboardTest.keys(shape: shape, hasTouchBar: false).map { $0.keyCode }
+            XCTAssertEqual(codes.count, Set(codes).count, "\(shape)")
+        }
+    }
+
+    func testEachShapeHasItsOwnKeys() {
+        func codes(_ shape: KeyboardLayout.Shape) -> Set<UInt16> {
+            return Set(KeyboardTest.keys(shape: shape, hasTouchBar: false).map { $0.keyCode })
+        }
+        let section: UInt16 = 0x0A, grave: UInt16 = 0x32
+        XCTAssertTrue(codes(.ansi).contains(grave))
+        XCTAssertFalse(codes(.ansi).contains(section))
+        XCTAssertTrue(codes(.iso).isSuperset(of: [section, grave]))
+        XCTAssertTrue(codes(.jis).isSuperset(of: [0x5D, 0x5E, 0x66, 0x68]))
+        XCTAssertTrue(codes(.jis).isDisjoint(with: [section, grave]))
+    }
+
+    /// Every row must be as wide as the others once the space a tall key
+    /// takes from the row below is counted, or the drawing breaks.
+    func testRowsLineUp() {
+        for shape in [KeyboardLayout.Shape.ansi, .iso, .jis] {
+            let keys = KeyboardTest.keys(shape: shape, hasTouchBar: false)
+            for row in 0...5 {
+                let width = keys.filter { row >= $0.row && row < $0.row + $0.height }.reduce(0) { $0 + $1.width }
+                XCTAssertEqual(width, 15, accuracy: 0.001, "\(shape) row \(row)")
+            }
+        }
+    }
+
+    func testCharacterKeysUseTheLayoutLabels() {
+        let spanish: [UInt16: String] = [0x29: "Ñ", 0x2A: "Ç", 0x32: "<", 0x24: "should be ignored"]
+        let keys = KeyboardTest.keys(shape: .iso, hasTouchBar: false, label: { spanish[$0] })
+        func label(_ code: UInt16) -> String? {
+            return keys.first { $0.keyCode == code }?.label
+        }
+        XCTAssertEqual(label(0x29), "Ñ")
+        XCTAssertEqual(label(0x2A), "Ç")
+        XCTAssertEqual(label(0x32), "<")
+        XCTAssertEqual(label(0x24), "↩") // Return keeps its symbol
+        XCTAssertEqual(label(0x00), "A") // falls back to the US keycap
+    }
+
+    func testPhysicalTypeCodes() {
+        XCTAssertEqual(KeyboardLayout.Shape(physicalType: 0x4953_4F20), .iso)
+        XCTAssertEqual(KeyboardLayout.Shape(physicalType: 0x4A49_5320), .jis)
+        XCTAssertEqual(KeyboardLayout.Shape(physicalType: 0x414E_5349), .ansi)
     }
 
     func testFunctionKeysAreRequiredUnlessTouchBar() {
         let f1: UInt16 = 0x7A
-        XCTAssertTrue(KeyboardTest.keys(hasTouchBar: false).contains { $0.keyCode == f1 && $0.isRequired })
-        XCTAssertTrue(KeyboardTest.keys(hasTouchBar: true).contains { $0.keyCode == f1 && !$0.isRequired })
-        XCTAssertEqual(Set(KeyboardTest.keys(hasTouchBar: false).map { $0.keyCode }).intersection(KeyboardTest.functionKeyCodes),
+        XCTAssertTrue(KeyboardTest.keys(shape: .ansi, hasTouchBar: false).contains { $0.keyCode == f1 && $0.isRequired })
+        XCTAssertTrue(KeyboardTest.keys(shape: .ansi, hasTouchBar: true).contains { $0.keyCode == f1 && !$0.isRequired })
+        XCTAssertEqual(Set(keys.map { $0.keyCode }).intersection(KeyboardTest.functionKeyCodes),
                        KeyboardTest.functionKeyCodes)
     }
 
@@ -91,6 +136,24 @@ final class KeyboardEvaluationTests: XCTestCase {
         XCTAssertFalse(machine("MacBookPro14,1").hasTouchBar)
         XCTAssertFalse(machine("MacBookPro18,3").hasTouchBar)
         XCTAssertFalse(machine("MacBookAir10,1").hasTouchBar)
+    }
+}
+
+final class WiFiEvaluationTests: XCTestCase {
+    func testNoNetworksWarns() {
+        XCTAssertEqual(WiFiTest.evaluate(rssiValues: [], measurements: []).status, .warning)
+    }
+
+    func testOnlyWeakNetworksWarn() {
+        XCTAssertEqual(WiFiTest.evaluate(rssiValues: [-88, -84], measurements: []).status, .warning)
+    }
+
+    func testGoodSignalPassesWhetherConnectedOrNot() {
+        let notConnected = [DiagnosticMeasurement("Conectado a una red", "No (no afecta al resultado)")]
+        let outcome = WiFiTest.evaluate(rssiValues: [-84, -52], measurements: notConnected)
+        XCTAssertEqual(outcome.status, .passed)
+        XCTAssertTrue(outcome.measurements.contains(DiagnosticMeasurement("Señal más fuerte", "-52 dBm")))
+        XCTAssertTrue(outcome.measurements.contains(DiagnosticMeasurement("Redes detectadas", "2")))
     }
 }
 
@@ -127,5 +190,15 @@ final class FunctionKeyModeTests: XCTestCase {
     func testCurrentModeIsReadable() {
         XCTAssertNotNil(FunctionKeyMode(rawValue: FunctionKeyMode.current.rawValue))
         XCTAssertNotNil(FunctionKeyMode(rawValue: FunctionKeyMode.preferred.rawValue))
+    }
+}
+
+final class PermissionTests: XCTestCase {
+    func testEveryPermissionOpensItsPrivacyPane() {
+        for permission in Permission.allCases {
+            XCTAssertEqual(permission.settingsURL.scheme, "x-apple.systempreferences")
+            XCTAssertTrue(permission.settingsURL.absoluteString.hasSuffix("Privacy_\(permission.rawValue.capitalized)"))
+            XCTAssertTrue(permission.deniedMessage.contains(permission.displayName))
+        }
     }
 }

@@ -31,12 +31,12 @@ public final class CameraTest: DiagnosticTest {
             return
         }
 
-        MediaAuthorization.request(.video) { granted in
-            guard granted else {
-                completion(.error(MediaAuthorization.cameraDeniedMessage))
+        SystemPermissions.request(.camera) { status in
+            guard status == .granted else {
+                completion(.error(Permission.camera.deniedMessage))
                 return
             }
-            // The permission callback may arrive on any queue; capturing blocks.
+            // The permission callback arrives on the main queue; capturing blocks.
             DispatchQueue.global(qos: .userInitiated).async {
                 self.capture(from: device, context: context, completion: completion)
             }

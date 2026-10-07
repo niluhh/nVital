@@ -20,6 +20,9 @@ let package = Package(
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("CoreMedia"),
                 .linkedFramework("CoreVideo"),
+                .linkedFramework("CoreBluetooth"),
+                .linkedFramework("ApplicationServices"),
+                .linkedFramework("Carbon"),
             ]
         ),
         .testTarget(

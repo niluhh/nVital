@@ -76,17 +76,20 @@ public struct KeyDescriptor: Equatable {
     public let label: String
     /// Row on a Mac laptop keyboard, 0 = function row, 5 = space bar row.
     public let row: Int
-    /// Width relative to a letter key.
+    /// Width relative to a letter key. Every row adds up to the same width.
     public let width: Double
+    /// Rows the key spans downwards: 2 for the tall Return of ISO and JIS keyboards.
+    public let height: Int
     /// Optional keys are reported but do not make the test fail
-    /// (e.g. Escape on Touch Bar models).
+    /// (e.g. F1–F12 on Touch Bar models).
     public let isRequired: Bool
 
-    public init(keyCode: UInt16, label: String, row: Int, width: Double = 1, isRequired: Bool = true) {
+    public init(keyCode: UInt16, label: String, row: Int, width: Double = 1, height: Int = 1, isRequired: Bool = true) {
         self.keyCode = keyCode
         self.label = label
         self.row = row
         self.width = width
+        self.height = height
         self.isRequired = isRequired
     }
 }

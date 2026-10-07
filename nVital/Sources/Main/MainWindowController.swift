@@ -70,12 +70,54 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         ReportExporter.export(runner.makeReport(appVersion: AppDelegate.appVersion), from: window)
     }
 
+    /// Status of every permission, with a way to ask again or fix a refusal.
+    @objc func showPermissions(_ sender: Any?) {
+        guard let window = window else { return }
+        let statuses = Permission.allCases.map { (permission: $0, status: SystemPermissions.status(of: $0)) }
+        let lines = statuses.map { entry -> String in
+            switch entry.status {
+            case .granted:
+                return "✓ \(entry.permission.displayName): concedido"
+            case .denied:
+                return "✗ \(entry.permission.displayName): denegado"
+            case .notDetermined:
+                return "– \(entry.permission.displayName): \(entry.permission == .accessibility ? "sin conceder" : "sin pedir")"
+            }
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Permisos de nVital"
+        alert.informativeText = lines.joined(separator: "\n")
+            + "\n\nSin cámara, micrófono o Bluetooth, esas pruebas dan error. Accesibilidad es opcional: sirve para bloquear los atajos del sistema en la prueba de teclado."
+
+        var actions: [() -> Void] = []
+        let pending = statuses.filter { $0.status == .notDetermined }.map { $0.permission }
+        if !pending.isEmpty {
+            alert.addButton(withTitle: "Pedir permisos")
+            actions.append({ SystemPermissions.requestAll(pending) { _ in } })
+        }
+        // macOS never asks again for a refused permission: it must be enabled in Settings.
+        if let denied = statuses.first(where: { $0.status == .denied })?.permission {
+            alert.addButton(withTitle: "Abrir Ajustes del Sistema")
+            actions.append({ _ = NSWorkspace.shared.open(denied.settingsURL) })
+        }
+        alert.addButton(withTitle: "Cerrar")
+
+        alert.beginSheetModal(for: window) { response in
+            let index = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+            if index >= 0 && index < actions.count {
+                actions[index]()
+            }
+        }
+    }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(runAll(_:)): return !runner.isRunning
         case #selector(runSelected(_:)): return !runner.isRunning && tableView.selectedRow >= 0
         case #selector(stop(_:)): return runner.isRunning
         case #selector(exportReport(_:)): return !runner.isRunning && !runner.results.isEmpty
+        case #selector(showPermissions(_:)): return !runner.isRunning
         default: return true
         }
     }

@@ -38,6 +38,9 @@ targets:
       - sdk: AVFoundation.framework
       - sdk: CoreMedia.framework
       - sdk: CoreVideo.framework
+      - sdk: CoreBluetooth.framework
+      - sdk: ApplicationServices.framework
+      - sdk: Carbon.framework
     scheme:
       testTargets:
         - NVitalCoreTests

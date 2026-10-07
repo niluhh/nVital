@@ -77,8 +77,14 @@ Para distribuirla sin ese paso, fírmala con un certificado Developer ID y notar
 
 ### Permisos
 
-- **Cámara, micrófono y Bluetooth**: macOS los pide la primera vez que se ejecuta cada prueba.
-- **Accesibilidad** (opcional): en la prueba de teclado permite bloquear los atajos del sistema (F11 «Mostrar escritorio», ⌘Tab, Spotlight…) para que todas las pulsaciones lleguen a nVital. Sin este permiso, la prueba funciona igual, pero una tecla de función que no se detecte se marca como aviso en vez de como fallo.
+Al abrir nVital se piden seguidos todos los permisos que falten, para que ninguna prueba se interrumpa después:
+
+- **Cámara, micrófono y Bluetooth**: sin ellos, esas pruebas dan error.
+- **Accesibilidad** (opcional): en la prueba de teclado permite bloquear los atajos del sistema (F11 «Mostrar escritorio», ⌘Tab, Spotlight…) para que todas las pulsaciones lleguen a nVital. Se pide al abrir la app solo la primera vez en cada Mac, porque macOS repetiría el aviso en cada arranque. Sin este permiso, la prueba funciona igual, pero una tecla de función que no se detecte se marca como aviso en vez de como fallo.
+
+En **nVital › Permisos…** se ve el estado de cada uno, se pueden volver a pedir los que falten y se abre Ajustes del Sistema para activar los denegados (macOS no vuelve a preguntar por un permiso denegado).
+
+La prueba de teclado detecta la distribución en uso: dibuja la forma física del teclado (ANSI, ISO o JIS, por ejemplo con el Intro alto y la tecla `<` de los teclados españoles) y rotula cada tecla con lo que escribe en la fuente de entrada actual (Ñ, Ç, º…).
 
 Durante la prueba de teclado, la fila superior pasa a enviar F1–F12 (como la opción «Usar F1, F2, etc. como teclas de función estándar»), así que no cambia el brillo ni el volumen ni abre Mission Control. Al terminar se vuelve al modo elegido en Ajustes del Sistema. Si la app se cierra de forma inesperada durante la prueba, se restaura al volver a abrirla o al reiniciar sesión.
 

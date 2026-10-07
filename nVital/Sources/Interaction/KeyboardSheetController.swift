@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Carbon.HIToolbox
 import NVitalCore
 
@@ -73,7 +72,7 @@ final class KeyboardSheetController: SheetController {
 
     /// Disables system shortcuts while this app is frontmost, once permitted.
     private func updateShortcutBlocking() {
-        if hotKeyModeToken == nil && AXIsProcessTrusted() {
+        if hotKeyModeToken == nil && SystemPermissions.status(of: .accessibility) == .granted {
             hotKeyModeToken = PushSymbolicHotKeyMode(OptionBits(kHIHotKeyModeAllDisabled))
         }
         let blocked = hotKeyModeToken != nil
@@ -90,7 +89,7 @@ final class KeyboardSheetController: SheetController {
 
     @objc private func requestAccessibility(_ sender: Any?) {
         // Shows macOS' own prompt, which leads to Privacy & Security > Accessibility.
-        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        SystemPermissions.request(.accessibility) { _ in }
         window?.makeFirstResponder(keyboardView)
         trustTimer?.invalidate()
         trustTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -160,25 +159,26 @@ final class KeyboardView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let rows = Dictionary(grouping: keys, by: { $0.row })
-        let rowCount = (rows.keys.max() ?? 0) + 1
+        let rowCount = (keys.map { $0.row + $0.height - 1 }.max() ?? 0) + 1
         let gap: CGFloat = 4
         let rowHeight = (bounds.height - gap * CGFloat(rowCount - 1)) / CGFloat(rowCount)
-        let widestRow = rows.values.map { row in row.reduce(0) { $0 + $1.width } }.max() ?? 1
-        let maxKeysInRow = rows.values.map { $0.count }.max() ?? 1
-        let unit = (bounds.width - gap * CGFloat(maxKeysInRow - 1)) / CGFloat(widestRow)
+        // Widths are in units shared by every row, so all rows end at the same
+        // place and a tall key's slot lines up with the row below.
+        let rowUnits = rows.values.map { row in row.reduce(0) { $0 + $1.width } }.max() ?? 1
+        let unitWidth = (bounds.width + gap) / CGFloat(rowUnits)
 
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
 
-        for rowIndex in 0..<rowCount {
-            guard let rowKeys = rows[rowIndex] else { continue }
-            // Row 0 is at the top; AppKit's origin is bottom-left.
-            let y = bounds.height - CGFloat(rowIndex + 1) * rowHeight - CGFloat(rowIndex) * gap
+        for (rowIndex, rowKeys) in rows {
             var x: CGFloat = 0
             for key in rowKeys {
-                let width = unit * CGFloat(key.width)
-                let rect = NSRect(x: x, y: y, width: width, height: rowHeight)
-                x += width + gap
+                // Row 0 is at the top; AppKit's origin is bottom-left.
+                let top = CGFloat(rowIndex) * (rowHeight + gap)
+                let height = CGFloat(key.height) * rowHeight + CGFloat(key.height - 1) * gap
+                let rect = NSRect(x: x, y: bounds.height - top - height,
+                                  width: CGFloat(key.width) * unitWidth - gap, height: height)
+                x += CGFloat(key.width) * unitWidth
 
                 let pressed = pressedKeyCodes.contains(key.keyCode)
                 let held = heldKeyCodes.contains(key.keyCode)
@@ -190,7 +190,7 @@ final class KeyboardView: NSView {
                 path.stroke()
 
                 let attributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: key.label.count > 2 ? 10 : 13),
+                    .font: NSFont.systemFont(ofSize: key.label.count == 1 ? 15 : 11),
                     .foregroundColor: pressed || held ? NSColor.white : NSColor.labelColor,
                     .paragraphStyle: paragraph,
                 ]
