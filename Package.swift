@@ -22,6 +22,7 @@ let package = Package(
                 .linkedFramework("CoreVideo"),
                 .linkedFramework("CoreBluetooth"),
                 .linkedFramework("ApplicationServices"),
+                .linkedFramework("Carbon"),
             ]
         ),
         .testTarget(

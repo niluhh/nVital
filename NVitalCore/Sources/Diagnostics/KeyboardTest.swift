@@ -1,6 +1,7 @@
 import Foundation
 
-/// Asks the user to press every key of the built-in keyboard.
+/// Asks the user to press every key of the built-in keyboard, drawn with the
+/// shape (ANSI, ISO or JIS) and characters of the layout in use.
 public final class KeyboardTest: DiagnosticTest {
     public let identifier = "keyboard"
     public let name = "Teclado"
@@ -15,30 +16,36 @@ public final class KeyboardTest: DiagnosticTest {
     }
 
     public func run(in context: DiagnosticContext, completion: @escaping (DiagnosticOutcome) -> Void) {
-        let keys = Self.keys(hasTouchBar: context.machine.hasTouchBar)
-
         // Make the top row send F1–F12 so the keys are detected and do not
         // change the brightness or volume or open Mission Control meanwhile.
         let topRowSendsFunctionKeys = FunctionKeyMode.beginTemporaryOverride()
-        let functionKeysHint = topRowSendsFunctionKeys
-            ? "Durante la prueba, F1–F12 funcionan como teclas de función: no cambian el brillo ni el volumen ni abren Mission Control."
-            : "Para F1–F12, mantén pulsada la tecla fn a la vez."
-        let request = KeyboardCaptureRequest(
-            instructions: "Pulsa una vez cada tecla del teclado. Las teclas se iluminan al detectarse. \(functionKeysHint) Pulsa «Terminar» cuando acabes.",
-            keys: keys)
 
-        context.request(.keyboard(request)) { response in
-            FunctionKeyMode.endTemporaryOverride()
-            switch response {
-            case .keyboard(let result):
-                let reliable = topRowSendsFunctionKeys && result.systemShortcutsBlocked
-                completion(Self.evaluate(pressed: result.pressedKeyCodes, keys: keys, functionKeysReliable: reliable))
-            case .unavailable:
-                completion(.skipped("Esta prueba necesita al usuario."))
-            case .cancelled:
-                completion(.cancelled)
-            default:
-                completion(.skippedByUser)
+        // The keyboard layout can only be read on the main thread.
+        DispatchQueue.main.async {
+            let layout = KeyboardLayout.current()
+            let keys = Self.keys(shape: layout.shape, hasTouchBar: context.machine.hasTouchBar, label: layout.label(for:))
+            let functionKeysHint = topRowSendsFunctionKeys
+                ? "Durante la prueba, F1–F12 funcionan como teclas de función: no cambian el brillo ni el volumen ni abren Mission Control."
+                : "Para F1–F12, mantén pulsada la tecla fn a la vez."
+            let request = KeyboardCaptureRequest(
+                instructions: "Distribución detectada: \(layout.description). Pulsa una vez cada tecla del teclado; se iluminan al detectarse. \(functionKeysHint) Pulsa «Terminar» cuando acabes.",
+                keys: keys)
+
+            context.request(.keyboard(request)) { response in
+                FunctionKeyMode.endTemporaryOverride()
+                switch response {
+                case .keyboard(let result):
+                    let reliable = topRowSendsFunctionKeys && result.systemShortcutsBlocked
+                    var outcome = Self.evaluate(pressed: result.pressedKeyCodes, keys: keys, functionKeysReliable: reliable)
+                    outcome.measurements.insert(DiagnosticMeasurement("Distribución", layout.description), at: 0)
+                    completion(outcome)
+                case .unavailable:
+                    completion(.skipped("Esta prueba necesita al usuario."))
+                case .cancelled:
+                    completion(.cancelled)
+                default:
+                    completion(.skippedByUser)
+                }
             }
         }
     }
@@ -77,49 +84,86 @@ public final class KeyboardTest: DiagnosticTest {
     /// F1–F12.
     static let functionKeyCodes: Set<UInt16> = [0x7A, 0x78, 0x63, 0x76, 0x60, 0x61, 0x62, 0x64, 0x65, 0x6D, 0x67, 0x6F]
 
-    /// Mac laptop keyboard, identified by virtual key code (Carbon `kVK_*`).
-    /// Key codes are physical positions, so labels follow the US layout.
-    static func keys(hasTouchBar: Bool) -> [KeyDescriptor] {
-        func key(_ code: UInt16, _ label: String, _ row: Int, _ width: Double = 1, required: Bool = true) -> KeyDescriptor {
-            return KeyDescriptor(keyCode: code, label: label, row: row, width: width, isRequired: required)
+    /// Mac laptop keyboard of the given shape, identified by virtual key code
+    /// (Carbon `kVK_*`, i.e. physical positions). Keys that type a character
+    /// take their label from `label`, falling back to the US keycap.
+    static func keys(shape: KeyboardLayout.Shape, hasTouchBar: Bool,
+                     label: @escaping (UInt16) -> String? = { _ in nil }) -> [KeyDescriptor] {
+        func char(_ code: UInt16, _ usLabel: String, _ row: Int, _ width: Double = 1) -> KeyDescriptor {
+            return KeyDescriptor(keyCode: code, label: label(code) ?? usLabel, row: row, width: width)
         }
-        // On Touch Bar models F1–F12 are virtual keys shown only while fn is
-        // held, so they are reported but not required. Escape is always
-        // detectable, physical or on the Touch Bar.
-        let fKeys = !hasTouchBar
-        return [
-            key(0x35, "esc", 0, 1.5),
-            key(0x7A, "F1", 0, required: fKeys), key(0x78, "F2", 0, required: fKeys),
-            key(0x63, "F3", 0, required: fKeys), key(0x76, "F4", 0, required: fKeys),
-            key(0x60, "F5", 0, required: fKeys), key(0x61, "F6", 0, required: fKeys),
-            key(0x62, "F7", 0, required: fKeys), key(0x64, "F8", 0, required: fKeys),
-            key(0x65, "F9", 0, required: fKeys), key(0x6D, "F10", 0, required: fKeys),
-            key(0x67, "F11", 0, required: fKeys), key(0x6F, "F12", 0, required: fKeys),
+        func control(_ code: UInt16, _ symbol: String, _ row: Int, _ width: Double = 1,
+                     height: Int = 1, required: Bool = true) -> KeyDescriptor {
+            return KeyDescriptor(keyCode: code, label: symbol, row: row, width: width, height: height, isRequired: required)
+        }
+        func chars(_ list: [(UInt16, String)], _ row: Int) -> [KeyDescriptor] {
+            return list.map { char($0.0, $0.1, row) }
+        }
+        let digits: [(UInt16, String)] = [(0x12, "1"), (0x13, "2"), (0x14, "3"), (0x15, "4"), (0x17, "5"),
+                                          (0x16, "6"), (0x1A, "7"), (0x1C, "8"), (0x19, "9"), (0x1D, "0")]
+        let topLetters: [(UInt16, String)] = [(0x0C, "Q"), (0x0D, "W"), (0x0E, "E"), (0x0F, "R"), (0x11, "T"),
+                                              (0x10, "Y"), (0x20, "U"), (0x22, "I"), (0x1F, "O"), (0x23, "P")]
+        let homeLetters: [(UInt16, String)] = [(0x00, "A"), (0x01, "S"), (0x02, "D"), (0x03, "F"), (0x05, "G"),
+                                               (0x04, "H"), (0x26, "J"), (0x28, "K"), (0x25, "L")]
+        let bottomLetters: [(UInt16, String)] = [(0x06, "Z"), (0x07, "X"), (0x08, "C"), (0x09, "V"), (0x0B, "B"),
+                                                 (0x2D, "N"), (0x2E, "M")]
 
-            key(0x32, "`", 1), key(0x12, "1", 1), key(0x13, "2", 1), key(0x14, "3", 1),
-            key(0x15, "4", 1), key(0x17, "5", 1), key(0x16, "6", 1), key(0x1A, "7", 1),
-            key(0x1C, "8", 1), key(0x19, "9", 1), key(0x1D, "0", 1), key(0x1B, "-", 1),
-            key(0x18, "=", 1), key(0x33, "delete", 1, 1.5),
+        // Function row. On Touch Bar models F1–F12 are virtual keys shown only
+        // while fn is held, so they are reported but not required. Escape is
+        // always detectable, physical or on the Touch Bar.
+        var keys = [control(0x35, "esc", 0, 1.5)]
+        let functionCodes: [UInt16] = [0x7A, 0x78, 0x63, 0x76, 0x60, 0x61, 0x62, 0x64, 0x65, 0x6D, 0x67, 0x6F]
+        for (index, code) in functionCodes.enumerated() {
+            keys.append(control(code, "F\(index + 1)", 0, 1.125, required: !hasTouchBar))
+        }
 
-            key(0x30, "tab", 2, 1.5), key(0x0C, "Q", 2), key(0x0D, "W", 2), key(0x0E, "E", 2),
-            key(0x0F, "R", 2), key(0x11, "T", 2), key(0x10, "Y", 2), key(0x20, "U", 2),
-            key(0x22, "I", 2), key(0x1F, "O", 2), key(0x23, "P", 2), key(0x21, "[", 2),
-            key(0x1E, "]", 2), key(0x2A, "\\", 2),
+        // Every row is 15 units wide. On ISO and JIS the tall Return starts on
+        // row 2 and fills the end of row 3 too.
+        switch shape {
+        case .ansi:
+            keys += [char(0x32, "`", 1)] + chars(digits, 1)
+                + [char(0x1B, "-", 1), char(0x18, "=", 1), control(0x33, "⌫", 1, 2)]
+            keys += [control(0x30, "⇥", 2, 1.5)] + chars(topLetters, 2)
+                + [char(0x21, "[", 2), char(0x1E, "]", 2), char(0x2A, "\\", 2, 1.5)]
+            keys += [control(0x39, "⇪", 3, 1.75)] + chars(homeLetters, 3)
+                + [char(0x29, ";", 3), char(0x27, "'", 3), control(0x24, "↩", 3, 2.25)]
+            keys += [control(0x38, "⇧", 4, 2.25)] + chars(bottomLetters, 4)
+                + [char(0x2B, ",", 4), char(0x2F, ".", 4), char(0x2C, "/", 4), control(0x3C, "⇧", 4, 2.75)]
+        case .iso:
+            // Apple ISO keyboards send 0x0A for the key left of 1 and 0x32 for
+            // the one between left shift and Z.
+            keys += [char(0x0A, "§", 1)] + chars(digits, 1)
+                + [char(0x1B, "-", 1), char(0x18, "=", 1), control(0x33, "⌫", 1, 2)]
+            keys += [control(0x30, "⇥", 2, 1.5)] + chars(topLetters, 2)
+                + [char(0x21, "[", 2), char(0x1E, "]", 2), control(0x24, "↩", 2, 1.5, height: 2)]
+            keys += [control(0x39, "⇪", 3, 1.5)] + chars(homeLetters, 3)
+                + [char(0x29, ";", 3), char(0x27, "'", 3), char(0x2A, "\\", 3)]
+            keys += [control(0x38, "⇧", 4, 1.25), char(0x32, "`", 4)] + chars(bottomLetters, 4)
+                + [char(0x2B, ",", 4), char(0x2F, ".", 4), char(0x2C, "/", 4), control(0x3C, "⇧", 4, 2.75)]
+        case .jis:
+            keys += chars(digits, 1)
+                + [char(0x1B, "-", 1), char(0x18, "^", 1), char(0x5D, "¥", 1), control(0x33, "⌫", 1, 2)]
+            keys += [control(0x30, "⇥", 2, 1.5)] + chars(topLetters, 2)
+                + [char(0x21, "@", 2), char(0x1E, "[", 2), control(0x24, "↩", 2, 1.5, height: 2)]
+            keys += [control(0x3B, "⌃", 3, 1.5, required: false)] + chars(homeLetters, 3)
+                + [char(0x29, ";", 3), char(0x27, ":", 3), char(0x2A, "]", 3)]
+            keys += [control(0x38, "⇧", 4, 2.25)] + chars(bottomLetters, 4)
+                + [char(0x2B, ",", 4), char(0x2F, ".", 4), char(0x2C, "/", 4), char(0x5E, "_", 4), control(0x3C, "⇧", 4, 1.75)]
+        }
 
-            key(0x39, "caps lock", 3, 1.75), key(0x00, "A", 3), key(0x01, "S", 3), key(0x02, "D", 3),
-            key(0x03, "F", 3), key(0x05, "G", 3), key(0x04, "H", 3), key(0x26, "J", 3),
-            key(0x28, "K", 3), key(0x25, "L", 3), key(0x29, ";", 3), key(0x27, "'", 3),
-            key(0x24, "return", 3, 1.75),
-
-            key(0x38, "shift", 4, 1.5), key(0x0A, "§", 4, required: false), key(0x06, "Z", 4),
-            key(0x07, "X", 4), key(0x08, "C", 4), key(0x09, "V", 4), key(0x0B, "B", 4),
-            key(0x2D, "N", 4), key(0x2E, "M", 4), key(0x2B, ",", 4), key(0x2C, ".", 4),
-            key(0x2F, "/", 4), key(0x3C, "shift", 4, 2.25),
-
-            key(0x3F, "fn", 5, required: false), key(0x3B, "control", 5), key(0x3A, "option", 5),
-            key(0x37, "command", 5, 1.25), key(0x31, "space", 5, 5), key(0x36, "command", 5, 1.25),
-            key(0x3D, "option", 5), key(0x7B, "←", 5), key(0x7E, "↑", 5), key(0x7D, "↓", 5),
-            key(0x7C, "→", 5),
-        ]
+        let arrows = [control(0x7B, "←", 5), control(0x7E, "↑", 5), control(0x7D, "↓", 5), control(0x7C, "→", 5)]
+        switch shape {
+        case .ansi, .iso:
+            keys += [control(0x3F, "fn", 5, required: false), control(0x3B, "⌃", 5), control(0x3A, "⌥", 5),
+                     control(0x37, "⌘", 5, 1.25), control(0x31, "", 5, 4.5), control(0x36, "⌘", 5, 1.25),
+                     control(0x3D, "⌥", 5)] + arrows
+        case .jis:
+            // Where control, caps lock and fn sit differs between JIS models,
+            // so they are not required.
+            keys += [control(0x3F, "fn", 5, required: false), control(0x39, "⇪", 5, required: false),
+                     control(0x3A, "⌥", 5), control(0x37, "⌘", 5, 1.25), control(0x66, "英数", 5, 1.25),
+                     control(0x31, "", 5, 3), control(0x68, "かな", 5, 1.25), control(0x36, "⌘", 5, 1.25)] + arrows
+        }
+        return keys
     }
 }
