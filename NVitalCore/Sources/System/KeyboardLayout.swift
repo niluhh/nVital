@@ -66,15 +66,15 @@ public struct KeyboardLayout {
 
     private static func keycapLabel(_ keyCode: UInt16, layout: UnsafePointer<UCKeyboardLayout>, keyboardType: UInt32) -> String? {
         var deadKeyState: UInt32 = 0
-        var length: UniCharCount = 0
+        var length = 0
         var characters = [UniChar](repeating: 0, count: 4)
         // No modifiers; dead keys (´ ` ^ ¨) give their own character.
         let status = UCKeyTranslate(layout, keyCode, UInt16(kUCKeyActionDisplay), 0, keyboardType,
                                     OptionBits(kUCKeyTranslateNoDeadKeysMask), &deadKeyState,
-                                    UniCharCount(characters.count), &length, &characters)
+                                    characters.count, &length, &characters)
         guard status == 0, length > 0 else { return nil }
 
-        let text = String(utf16CodeUnits: characters, count: Int(length)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = String(utf16CodeUnits: characters, count: length).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
             return nil
         }
