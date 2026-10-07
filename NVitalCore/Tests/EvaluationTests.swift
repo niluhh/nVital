@@ -94,6 +94,24 @@ final class KeyboardEvaluationTests: XCTestCase {
     }
 }
 
+final class WiFiEvaluationTests: XCTestCase {
+    func testNoNetworksWarns() {
+        XCTAssertEqual(WiFiTest.evaluate(rssiValues: [], measurements: []).status, .warning)
+    }
+
+    func testOnlyWeakNetworksWarn() {
+        XCTAssertEqual(WiFiTest.evaluate(rssiValues: [-88, -84], measurements: []).status, .warning)
+    }
+
+    func testGoodSignalPassesWhetherConnectedOrNot() {
+        let notConnected = [DiagnosticMeasurement("Conectado a una red", "No (no afecta al resultado)")]
+        let outcome = WiFiTest.evaluate(rssiValues: [-84, -52], measurements: notConnected)
+        XCTAssertEqual(outcome.status, .passed)
+        XCTAssertTrue(outcome.measurements.contains(DiagnosticMeasurement("Señal más fuerte", "-52 dBm")))
+        XCTAssertTrue(outcome.measurements.contains(DiagnosticMeasurement("Redes detectadas", "2")))
+    }
+}
+
 final class TrackpadEvaluationTests: XCTestCase {
     func testFullUsePasses() {
         let result = TrackpadCaptureResult(visitedCells: 40, totalCells: 40, primaryClick: true,
