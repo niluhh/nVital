@@ -147,3 +147,13 @@ final class FunctionKeyModeTests: XCTestCase {
         XCTAssertNotNil(FunctionKeyMode(rawValue: FunctionKeyMode.preferred.rawValue))
     }
 }
+
+final class PermissionTests: XCTestCase {
+    func testEveryPermissionOpensItsPrivacyPane() {
+        for permission in Permission.allCases {
+            XCTAssertEqual(permission.settingsURL.scheme, "x-apple.systempreferences")
+            XCTAssertTrue(permission.settingsURL.absoluteString.hasSuffix("Privacy_\(permission.rawValue.capitalized)"))
+            XCTAssertTrue(permission.deniedMessage.contains(permission.displayName))
+        }
+    }
+}

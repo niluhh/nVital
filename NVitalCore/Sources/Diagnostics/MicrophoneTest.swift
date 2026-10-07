@@ -20,9 +20,9 @@ public final class MicrophoneTest: DiagnosticTest {
     public init() {}
 
     public func run(in context: DiagnosticContext, completion: @escaping (DiagnosticOutcome) -> Void) {
-        MediaAuthorization.request(.audio) { granted in
-            guard granted else {
-                completion(.error(MediaAuthorization.microphoneDeniedMessage))
+        SystemPermissions.request(.microphone) { status in
+            guard status == .granted else {
+                completion(.error(Permission.microphone.deniedMessage))
                 return
             }
             let notice = NoticeRequest(

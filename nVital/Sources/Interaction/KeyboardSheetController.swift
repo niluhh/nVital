@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Carbon.HIToolbox
 import NVitalCore
 
@@ -73,7 +72,7 @@ final class KeyboardSheetController: SheetController {
 
     /// Disables system shortcuts while this app is frontmost, once permitted.
     private func updateShortcutBlocking() {
-        if hotKeyModeToken == nil && AXIsProcessTrusted() {
+        if hotKeyModeToken == nil && SystemPermissions.status(of: .accessibility) == .granted {
             hotKeyModeToken = PushSymbolicHotKeyMode(OptionBits(kHIHotKeyModeAllDisabled))
         }
         let blocked = hotKeyModeToken != nil
@@ -90,7 +89,7 @@ final class KeyboardSheetController: SheetController {
 
     @objc private func requestAccessibility(_ sender: Any?) {
         // Shows macOS' own prompt, which leads to Privacy & Security > Accessibility.
-        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        SystemPermissions.request(.accessibility) { _ in }
         window?.makeFirstResponder(keyboardView)
         trustTimer?.invalidate()
         trustTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in

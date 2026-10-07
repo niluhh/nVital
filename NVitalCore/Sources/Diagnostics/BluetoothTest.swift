@@ -11,8 +11,12 @@ public final class BluetoothTest: DiagnosticTest {
     public init() {}
 
     public func run(in context: DiagnosticContext, completion: @escaping (DiagnosticOutcome) -> Void) {
-        // IOBluetooth is not documented as thread-safe.
-        DispatchQueue.main.async {
+        // Calls back on the main queue: IOBluetooth is not documented as thread-safe.
+        SystemPermissions.request(.bluetooth) { status in
+            guard status != .denied else {
+                completion(.error(Permission.bluetooth.deniedMessage))
+                return
+            }
             completion(Self.inspectController())
         }
     }
@@ -20,7 +24,7 @@ public final class BluetoothTest: DiagnosticTest {
     private static func inspectController() -> DiagnosticOutcome {
         guard let controller = IOBluetoothHostController.default(),
               let address = controller.addressAsString(), !address.isEmpty else {
-            return .failed("No se ha encontrado el controlador Bluetooth. Si macOS ha pedido permiso de Bluetooth, concédelo en Preferencias del Sistema > Seguridad y privacidad y repite la prueba.")
+            return .failed("No se ha encontrado el controlador Bluetooth.")
         }
 
         let isOn = controller.powerState == kBluetoothHCIPowerStateON

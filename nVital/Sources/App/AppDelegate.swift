@@ -14,6 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.showWindow(nil)
         mainWindowController = controller
         NSApp.activate(ignoringOtherApps: true)
+        requestPermissions()
+    }
+
+    /// Asks for every permission up front, so no prompt interrupts the tests.
+    private func requestPermissions() {
+        var permissions: [Permission] = [.camera, .microphone, .bluetooth]
+        // macOS does not remember a refusal of Accessibility, so asking at
+        // every launch would repeat its prompt: ask the first time on each
+        // Mac only. It stays available in nVital › Permisos… and the keyboard test.
+        let accessibilityAskedKey = "AccessibilityRequestedAtLaunch"
+        if SystemPermissions.status(of: .accessibility) != .granted,
+           !UserDefaults.standard.bool(forKey: accessibilityAskedKey) {
+            UserDefaults.standard.set(true, forKey: accessibilityAskedKey)
+            permissions.append(.accessibility)
+        }
+        SystemPermissions.requestAll(permissions) { _ in }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

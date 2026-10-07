@@ -8,6 +8,7 @@ enum MainMenu {
 
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "Acerca de nVital", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Permisos…", action: #selector(MainWindowController.showPermissions(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Ocultar nVital", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
